@@ -7,13 +7,14 @@ import { Badge } from '@/components/ui/badge'
 import { getNoteDetail, deleteNote } from '@/app/actions/notes'
 
 interface NoteDetailPageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function NoteDetailPage({ params }: NoteDetailPageProps) {
-  const result = await getNoteDetail(params.id)
+  const { id } = await params
+  const result = await getNoteDetail(id)
 
   if (!result.success || !result.data) {
     notFound()
