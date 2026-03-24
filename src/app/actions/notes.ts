@@ -5,8 +5,9 @@ import { readDocument, writeDocument, deleteDocument } from '@/lib/db/lowdb'
 import { kv } from '@/lib/db/kv'
 import { generateUUID } from '@/lib/utils/uuid'
 import { validateTitle, validateTags, validateNoteId, validateContent } from '@/lib/utils/validation'
-import type { 
-  CreateNoteInput, 
+import { logBehavior } from './analytics'
+import type {
+  CreateNoteInput,
   CreateNoteOutput,
   UpdateNoteInput,
   UpdateNoteOutput,
@@ -262,6 +263,16 @@ export async function getNoteDetail(id: string): Promise<GetNoteDetailOutput> {
 
     // Increment view count in KV
     const views = await kv.incr(`note:${id}:views`)
+
+    // 异步记录用户行为日志（不阻塞主流程）
+    logBehavior({
+      userId: 'anonymous', // 实际应用中应从session获取
+      noteId: id,
+      actionType: 'view',
+      deviceType: 'desktop', // 实际应用中应从UA判断
+    }).catch((error) => {
+      console.error('[Analytics] Failed to log behavior:', error)
+    })
 
     return {
       success: true,

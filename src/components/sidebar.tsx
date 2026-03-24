@@ -30,10 +30,21 @@ export function Sidebar({ hotNotes }: SidebarProps) {
         <HotNotes notes={hotNotes} />
       </div>
 
-      {/* Footer */}
+      {/* Analytics Link */}
       <div className="mt-4 pt-4 border-t border-gray-200">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+        >
+          <span>📊</span>
+          <span>数据分析</span>
+        </Link>
+      </div>
+
+      {/* Footer */}
+      <div className="mt-2 pt-2 border-t border-gray-200">
         <p className="text-xs text-gray-400">
-          Powered by Next.js + SQLite
+          Powered by Next.js + SQLite + Cassandra
         </p>
       </div>
     </aside>

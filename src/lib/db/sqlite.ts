@@ -32,9 +32,27 @@ function initializeDatabase() {
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_notes_updated_at ON notes(updated_at DESC)
   `)
-  
+
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_notes_title ON notes(title)
+  `)
+
+  // Create daily aggregated stats table for analytics
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS daily_aggregated_stats (
+      date TEXT PRIMARY KEY,
+      total_views INTEGER DEFAULT 0,
+      avg_duration REAL DEFAULT 0,
+      top_device TEXT DEFAULT 'unknown',
+      mobile_views INTEGER DEFAULT 0,
+      desktop_views INTEGER DEFAULT 0,
+      updated_at INTEGER NOT NULL
+    )
+  `)
+
+  // Create index for aggregated stats
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_daily_stats_date ON daily_aggregated_stats(date DESC)
   `)
 }
 

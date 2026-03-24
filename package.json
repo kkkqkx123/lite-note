@@ -6,10 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint ."
   },
   "dependencies": {
     "better-sqlite3": "^12.8.0",
+    "cassandra-driver": "^4.8.0",
     "clsx": "^2.1.1",
     "keyv": "^5.6.0",
     "lowdb": "^7.0.1",
@@ -21,16 +22,17 @@
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
+    "@next/eslint-plugin-next": "^16.2.1",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.5.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "autoprefixer": "^10.4.27",
-    "eslint": "^10.1.0",
     "eslint-config-next": "16.2.1",
     "postcss": "^8.5.8",
     "tailwindcss": "^4.2.2",
-    "typescript": "^6.0.2"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.2"
   }
 }
