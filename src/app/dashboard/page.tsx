@@ -360,54 +360,69 @@ function TrendChart({ data }: { data: TrendDataPoint[] }) {
   const maxCount = Math.max(...data.map((d) => d.count), 1)
 
   return (
-    <div className="h-48 flex items-end gap-1">
-      {data.map((point) => {
-        const heightPercentage = (point.count / maxCount) * 100
-        const barHeight = Math.max(heightPercentage, point.count > 0 ? 4 : 0)
-        const showValueInside = heightPercentage > 20 && point.count > 0
+    <div className="flex flex-col">
+      {/* 图表区域 */}
+      <div className="h-44 flex gap-1">
+        {data.map((point) => {
+          const heightPercentage = (point.count / maxCount) * 100
+          const barHeight = Math.max(heightPercentage, point.count > 0 ? 4 : 0)
+          const showValueInside = heightPercentage > 20 && point.count > 0
 
-        return (
-          <div
-            key={point.hour}
-            className="flex-1 flex flex-col items-center group relative"
-            title={`${point.hour}:00 - ${point.count} 次`}
-          >
-            {/* 数值显示（柱子上方或内部） */}
-            {point.count > 0 && (
-              <span
-                className={`text-xs font-medium text-slate-700 mb-1 transition-all group-hover:font-bold group-hover:text-blue-600 ${
-                  showValueInside ? 'absolute -top-5' : 'relative'
-                }`}
-              >
-                {point.count}
-              </span>
-            )}
-            
-            {/* 柱状条 */}
+          return (
             <div
-              className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t transition-all hover:from-blue-600 hover:to-blue-500 hover:shadow-lg relative"
-              style={{
-                height: `${barHeight}%`,
-                minHeight: point.count > 0 ? '4px' : '0px',
-              }}
+              key={point.hour}
+              className="flex-1 flex flex-col items-center group relative h-full"
+              title={`${point.hour}:00 - ${point.count} 次`}
             >
-              {/* 内部数值（仅当柱子足够高时显示） */}
-              {showValueInside && (
-                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">
+              {/* 数值显示（柱子上方） */}
+              {point.count > 0 && (
+                <span
+                  className={`text-xs font-medium text-slate-700 mb-1 transition-all group-hover:font-bold group-hover:text-blue-600 ${
+                    showValueInside ? 'absolute -top-5 z-10' : 'relative flex-shrink-0'
+                  }`}
+                >
                   {point.count}
                 </span>
               )}
+              
+              {/* 图表区域（固定高度） */}
+              <div className="flex-1 w-full relative min-h-0">
+                {/* 柱状条（绝对定位，从底部向上） */}
+                <div
+                  className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-blue-500 to-blue-400 rounded-t transition-all hover:from-blue-600 hover:to-blue-500 hover:shadow-lg"
+                  style={{
+                    height: `${barHeight}%`,
+                    minHeight: point.count > 0 ? '4px' : '0px',
+                  }}
+                >
+                  {/* 内部数值（仅当柱子足够高时显示） */}
+                  {showValueInside && (
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                      {point.count}
+                    </span>
+                  )}
+                </div>
+              </div>
             </div>
-            
-            {/* 时间标签（每3小时显示一次） */}
+          )
+        })}
+      </div>
+
+      {/* 时间标签（独立的一行） */}
+      <div className="flex gap-1 mt-1">
+        {data.map((point) => (
+          <div
+            key={`label-${point.hour}`}
+            className="flex-1 flex justify-center"
+          >
             {point.hour % 3 === 0 && (
-              <span className="text-xs text-slate-500 mt-1 group-hover:text-slate-700 transition-colors">
+              <span className="text-xs text-slate-500">
                 {point.hour}:00
               </span>
             )}
           </div>
-        )
-      })}
+        ))}
+      </div>
     </div>
   )
 }
