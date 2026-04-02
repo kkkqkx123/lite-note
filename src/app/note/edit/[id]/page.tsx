@@ -3,13 +3,14 @@ import { NoteEditor } from '@/components/note-editor'
 import { getNoteDetail } from '@/app/actions/notes'
 
 interface EditNotePageProps {
-  params: {
+  params: Promise<{
     id: string
-  }
+  }>
 }
 
 export default async function EditNotePage({ params }: EditNotePageProps) {
-  const result = await getNoteDetail(params.id)
+  const { id } = await params
+  const result = await getNoteDetail(id)
 
   if (!result.success || !result.data) {
     notFound()

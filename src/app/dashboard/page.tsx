@@ -8,12 +8,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import {
-  getTrends,
-  getDeviceDistribution,
   getRecentLogs,
   generateTestData,
   checkCassandraStatus,
   aggregateDailyStats,
+  getCassandraHealth,
+  cleanupCassandraData,
+  getDashboardStats,
 } from '@/app/actions/analytics'
 import type {
   TrendDataPoint,
@@ -24,12 +25,24 @@ import type {
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
+  const [cleaning, setCleaning] = useState(false)
   const [cassandraStatus, setCassandraStatus] = useState<{
     available: boolean
     enabled: boolean
   }>({ available: false, enabled: false })
+  const [healthDetails, setHealthDetails] = useState<{
+    keyspaceReady: boolean
+    tables: { userBehaviorLogs: boolean; dailyAggregatedStats: boolean }
+    latency: number
+  } | null>(null)
+
+  // 统计数据
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [last24HoursTotal, setLast24HoursTotal] = useState(0)
+  const [avgPerHour, setAvgPerHour] = useState(0)
   const [trends, setTrends] = useState<TrendDataPoint[]>([])
   const [deviceDistribution, setDeviceDistribution] = useState<DeviceDistribution[]>([])
+  const [topDevice, setTopDevice] = useState('N/A')
   const [recentLogs, setRecentLogs] = useState<UserBehaviorLog[]>([])
 
   // 加载数据
@@ -40,19 +53,31 @@ export default function DashboardPage() {
       const status = await checkCassandraStatus()
       setCassandraStatus(status)
 
-      // 并行加载所有数据
-      const [trendsResult, deviceResult, logsResult] = await Promise.all([
-        getTrends(),
-        getDeviceDistribution(),
+      // 获取详细健康状态
+      if (status.enabled) {
+        const healthResult = await getCassandraHealth()
+        if (healthResult.success && healthResult.status) {
+          setHealthDetails({
+            keyspaceReady: healthResult.status.keyspaceReady,
+            tables: healthResult.status.tables,
+            latency: healthResult.status.latency,
+          })
+        }
+      }
+
+      // 使用新的统一统计API获取准确数据
+      const [statsResult, logsResult] = await Promise.all([
+        getDashboardStats(),
         getRecentLogs(20),
       ])
 
-      if (trendsResult.success && trendsResult.data) {
-        setTrends(trendsResult.data)
-      }
-
-      if (deviceResult.success && deviceResult.data) {
-        setDeviceDistribution(deviceResult.data)
+      if (statsResult.success && statsResult.data) {
+        setTotalRecords(statsResult.data.totalRecords)
+        setLast24HoursTotal(statsResult.data.last24Hours.total)
+        setAvgPerHour(statsResult.data.last24Hours.avgPerHour)
+        setTrends(statsResult.data.last24Hours.trends)
+        setDeviceDistribution(statsResult.data.deviceDistribution)
+        setTopDevice(statsResult.data.topDevice)
       }
 
       if (logsResult.success && logsResult.data) {
@@ -69,13 +94,14 @@ export default function DashboardPage() {
     loadData()
   }, [loadData])
 
-  // 生成测试数据
+  // 生成测试数据（限制数量，大量数据请使用脚本）
   const handleGenerateTestData = async () => {
     setGenerating(true)
     try {
-      const result = await generateTestData(10000)
+      // 界面只生成少量数据，大量数据推荐使用脚本
+      const result = await generateTestData(100)
       if (result.success) {
-        alert(`成功生成 ${result.generated} 条测试数据！`)
+        alert(`成功生成 ${result.generated} 条测试数据！\n\n需要生成更多数据请运行:\nnpx tsx scripts/seed-cassandra.ts 5000`)
         await loadData()
       } else {
         alert(`生成失败: ${result.error}`)
@@ -93,7 +119,7 @@ export default function DashboardPage() {
     try {
       const result = await aggregateDailyStats()
       if (result.success) {
-        alert('聚合统计完成！')
+        alert(`聚合统计完成！今日浏览量: ${result.stats?.totalViews || 0}`)
       } else {
         alert(`聚合失败: ${result.error}`)
       }
@@ -103,17 +129,30 @@ export default function DashboardPage() {
     }
   }
 
-  // 计算总阅读量
-  const totalViews = trends.reduce((sum, t) => sum + t.count, 0)
+  // 清理测试数据
+  const handleCleanupData = async () => {
+    if (!confirm('确定要清理所有测试数据吗？此操作不可恢复。')) {
+      return
+    }
 
-  // 计算平均每小时阅读量
-  const avgHourlyViews = trends.length > 0 ? totalViews / trends.length : 0
+    setCleaning(true)
+    try {
+      const result = await cleanupCassandraData()
+      if (result.success) {
+        alert(`成功清理 ${result.deletedRows} 条测试数据！`)
+        await loadData()
+      } else {
+        alert(`清理失败: ${result.error}`)
+      }
+    } catch (error) {
+      console.error('Failed to cleanup data:', error)
+      alert('清理数据失败')
+    } finally {
+      setCleaning(false)
+    }
+  }
 
-  // 获取主要设备
-  const topDevice =
-    deviceDistribution.length > 0
-      ? deviceDistribution.sort((a, b) => b.count - a.count)[0].device_type
-      : 'N/A'
+  // 统计数据现在直接从 API 获取，不需要前端计算
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
@@ -131,6 +170,12 @@ export default function DashboardPage() {
               <h1 className="text-2xl font-bold text-slate-900">数据分析看板</h1>
             </div>
             <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard/data"
+                className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+              >
+                数据浏览
+              </Link>
               <button
                 onClick={loadData}
                 disabled={loading}
@@ -140,16 +185,24 @@ export default function DashboardPage() {
               </button>
               <button
                 onClick={handleAggregate}
-                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                disabled={!cassandraStatus.available}
+                className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
               >
                 执行聚合
               </button>
               <button
                 onClick={handleGenerateTestData}
-                disabled={generating || !cassandraStatus.enabled}
+                disabled={generating || !cassandraStatus.available}
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50"
               >
                 {generating ? '生成中...' : '生成测试数据'}
+              </button>
+              <button
+                onClick={handleCleanupData}
+                disabled={cleaning || !cassandraStatus.available}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50"
+              >
+                {cleaning ? '清理中...' : '清理数据'}
               </button>
             </div>
           </div>
@@ -159,26 +212,45 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Cassandra Status */}
         <div className="mb-6 p-4 bg-white rounded-lg border border-slate-200 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                cassandraStatus.available
-                  ? 'bg-green-500'
-                  : cassandraStatus.enabled
-                  ? 'bg-red-500'
-                  : 'bg-gray-400'
-              }`}
-            />
-            <span className="text-sm text-slate-600">
-              Cassandra 状态:{' '}
-              <span className="font-medium">
-                {!cassandraStatus.enabled
-                  ? '已禁用'
-                  : cassandraStatus.available
-                  ? '已连接'
-                  : '未连接'}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-3 h-3 rounded-full ${
+                  cassandraStatus.available
+                    ? 'bg-green-500'
+                    : cassandraStatus.enabled
+                    ? 'bg-red-500'
+                    : 'bg-gray-400'
+                }`}
+              />
+              <span className="text-sm text-slate-600">
+                Cassandra 状态:{' '}
+                <span className="font-medium">
+                  {!cassandraStatus.enabled
+                    ? '已禁用'
+                    : cassandraStatus.available
+                    ? '已连接'
+                    : '未连接'}
+                </span>
               </span>
-            </span>
+            </div>
+            {healthDetails && cassandraStatus.available && (
+              <div className="flex items-center gap-4 text-xs text-slate-500">
+                <span className="flex items-center gap-1">
+                  <span className={`w-2 h-2 rounded-full ${healthDetails.keyspaceReady ? 'bg-green-400' : 'bg-red-400'}`} />
+                  Keyspace
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className={`w-2 h-2 rounded-full ${healthDetails.tables.userBehaviorLogs ? 'bg-green-400' : 'bg-red-400'}`} />
+                  日志表
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className={`w-2 h-2 rounded-full ${healthDetails.tables.dailyAggregatedStats ? 'bg-green-400' : 'bg-red-400'}`} />
+                  统计表
+                </span>
+                <span>延迟: {healthDetails.latency}ms</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -189,17 +261,23 @@ export default function DashboardPage() {
         ) : (
           <>
             {/* Key Metrics */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
               <MetricCard
-                title="总阅读量"
-                value={totalViews.toLocaleString()}
+                title="总记录数"
+                value={totalRecords.toLocaleString()}
+                subtitle="累计"
+                icon="🗄️"
+              />
+              <MetricCard
+                title="24小时阅读"
+                value={last24HoursTotal.toLocaleString()}
                 subtitle="过去24小时"
                 icon="📊"
               />
               <MetricCard
                 title="平均每小时"
-                value={avgHourlyViews.toFixed(1)}
-                subtitle="阅读量"
+                value={avgPerHour.toLocaleString()}
+                subtitle="过去24小时"
                 icon="📈"
               />
               <MetricCard
