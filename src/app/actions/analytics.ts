@@ -165,83 +165,6 @@ export async function getUserTracks(
 }
 
 /**
- * 获取趋势数据（过去24小时）
- */
-export async function getTrends(): Promise<{
-  success: boolean
-  data?: TrendDataPoint[]
-  error?: string
-}> {
-  try {
-    // 优先从SQLite读取聚合数据
-    const today = new Date().toISOString().split('T')[0]
-    const cachedStats = sqlite.get<DailyAggregatedStats>(
-      'SELECT * FROM daily_aggregated_stats WHERE date = ?',
-      [today]
-    )
-
-    if (cachedStats) {
-      // 如果有缓存数据，返回模拟的小时趋势
-      const trends: TrendDataPoint[] = []
-      for (let i = 0; i < 24; i++) {
-        trends.push({
-          hour: i,
-          count: Math.floor((cachedStats.total_views / 24) * (0.5 + Math.random())),
-        })
-      }
-      return { success: true, data: trends }
-    }
-
-    // 如果没有缓存，从Cassandra查询
-    if (!CASSANDRA_ENABLED) {
-      return { success: true, data: [] }
-    }
-
-    const client = await getCassandraClient()
-    const now = Date.now()
-    const twentyFourHoursAgo = now - 24 * 60 * 60 * 1000
-
-    // 注意：生产环境应避免ALLOW FILTERING，这里仅用于演示
-    const query = `
-      SELECT timestamp
-      FROM lite_note_analytics.user_behavior_logs
-      WHERE timestamp >= ?
-      ALLOW FILTERING
-    `
-
-    const result = await client.execute(query, [twentyFourHoursAgo], { prepare: true })
-
-    // 按小时分组统计
-    const hourCounts: Record<number, number> = {}
-    result.rows.forEach((row) => {
-      // 处理 BIGINT 类型转换
-      const ts = row.get('timestamp')
-      const timestamp = typeof ts === 'object' && ts !== null
-        ? Number(ts.toString())
-        : Number(ts)
-      const hour = new Date(timestamp).getHours()
-      hourCounts[hour] = (hourCounts[hour] || 0) + 1
-    })
-
-    const trends: TrendDataPoint[] = []
-    for (let i = 0; i < 24; i++) {
-      trends.push({
-        hour: i,
-        count: hourCounts[i] || 0,
-      })
-    }
-
-    return { success: true, data: trends }
-  } catch (error) {
-    console.error('[Analytics] getTrends error:', error)
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }
-  }
-}
-
-/**
  * 获取设备分布
  */
 export async function getDeviceDistribution(): Promise<{
@@ -390,7 +313,8 @@ export async function generateTestData(count: number = 100): Promise<{
       const noteId = `test_note_${Math.floor(Math.random() * 50)}`
       const actionType = actionTypes[Math.floor(Math.random() * actionTypes.length)]
       const deviceType = deviceTypes[Math.floor(Math.random() * deviceTypes.length)]
-      const timestamp = Date.now() - Math.floor(Math.random() * 7 * 24 * 60 * 60 * 1000)
+      // 生成过去24小时内的数据，以便立即看到趋势效果
+      const timestamp = Date.now() - Math.floor(Math.random() * 24 * 60 * 60 * 1000)
       const durationMs = Math.floor(Math.random() * 10000)
 
       await client.execute(

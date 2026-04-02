@@ -347,7 +347,7 @@ function MetricCard({
   )
 }
 
-// Trend Chart Component (Simple Bar Chart)
+// Trend Chart Component (Simple Bar Chart with values)
 function TrendChart({ data }: { data: TrendDataPoint[] }) {
   if (data.length === 0) {
     return (
@@ -361,24 +361,53 @@ function TrendChart({ data }: { data: TrendDataPoint[] }) {
 
   return (
     <div className="h-48 flex items-end gap-1">
-      {data.map((point) => (
-        <div
-          key={point.hour}
-          className="flex-1 flex flex-col items-center"
-          title={`${point.hour}:00 - ${point.count} 次`}
-        >
+      {data.map((point) => {
+        const heightPercentage = (point.count / maxCount) * 100
+        const barHeight = Math.max(heightPercentage, point.count > 0 ? 4 : 0)
+        const showValueInside = heightPercentage > 20 && point.count > 0
+
+        return (
           <div
-            className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t transition-all hover:from-blue-600 hover:to-blue-500"
-            style={{
-              height: `${(point.count / maxCount) * 100}%`,
-              minHeight: point.count > 0 ? '4px' : '0px',
-            }}
-          />
-          {point.hour % 6 === 0 && (
-            <span className="text-xs text-slate-500 mt-1">{point.hour}:00</span>
-          )}
-        </div>
-      ))}
+            key={point.hour}
+            className="flex-1 flex flex-col items-center group relative"
+            title={`${point.hour}:00 - ${point.count} 次`}
+          >
+            {/* 数值显示（柱子上方或内部） */}
+            {point.count > 0 && (
+              <span
+                className={`text-xs font-medium text-slate-700 mb-1 transition-all group-hover:font-bold group-hover:text-blue-600 ${
+                  showValueInside ? 'absolute -top-5' : 'relative'
+                }`}
+              >
+                {point.count}
+              </span>
+            )}
+            
+            {/* 柱状条 */}
+            <div
+              className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t transition-all hover:from-blue-600 hover:to-blue-500 hover:shadow-lg relative"
+              style={{
+                height: `${barHeight}%`,
+                minHeight: point.count > 0 ? '4px' : '0px',
+              }}
+            >
+              {/* 内部数值（仅当柱子足够高时显示） */}
+              {showValueInside && (
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                  {point.count}
+                </span>
+              )}
+            </div>
+            
+            {/* 时间标签（每3小时显示一次） */}
+            {point.hour % 3 === 0 && (
+              <span className="text-xs text-slate-500 mt-1 group-hover:text-slate-700 transition-colors">
+                {point.hour}:00
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
